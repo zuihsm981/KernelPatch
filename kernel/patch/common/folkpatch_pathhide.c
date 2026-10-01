@@ -196,11 +196,30 @@ static void folkpatch_pathhide_after_getdents64(hook_fargs4_t *args, void *udata
     void __user *user_data;
     int len = (int)(long)args->ret;
     int filtered;
+    int fd;
 
     (void)udata;
     if (len <= 0 || len > FOLKPATCH_PATHHIDE_DIRENT_LEN ||
         !folkpatch_pathhide_should_filter()) return;
-    if (folkpatch_pathhide_fd_path((int)syscall_argn(args, 0), dir, sizeof(dir))) return;
+    /*
+     * The 0.13.9+ global syscall dispatcher (hook on invoke_syscall) runs the
+     * after callbacks only after invoke_syscall has already written the syscall
+     * result into regs->regs[0], so syscall_argn(args, 0) no longer yields the
+     * directory fd here - it yields the getdents64 byte count, and fget() on it
+     * fails, silently disabling the whole readdir filter. regs->orig_x0 always
+     * carries the original first syscall argument on arm64 (el0_svc_common
+     * snapshots it before invoking the handler) and is correct under both the
+     * dispatcher and the legacy per-syscall wrap, so prefer it whenever syscall
+     * wrappers are present.
+     */
+    if (has_syscall_wrapper) {
+        struct pt_regs *regs = (struct pt_regs *)((hook_fargs0_t *)args)->args[0];
+        if (!regs) return;
+        fd = (int)regs->orig_x0;
+    } else {
+        fd = (int)syscall_argn(args, 0);
+    }
+    if (folkpatch_pathhide_fd_path(fd, dir, sizeof(dir))) return;
     snapshot = vmalloc(len);
     if (!snapshot) return;
     user_data = (void __user *)syscall_argn(args, 1);

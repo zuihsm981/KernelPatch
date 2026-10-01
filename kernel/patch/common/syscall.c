@@ -525,8 +525,13 @@ static void syscall_dispatch_before(hook_fargs8_t *args, void *udata)
      * set these; hooked at its entry we must set them ourselves so callbacks
      * that inspect them (resolve_pt_regs scans the stack for a matching frame)
      * see the same state as under the per-syscall hook. */
+    /* Always snapshot the original first syscall argument (arm64 pt_regs
+     * orig_x0): the after phase must be able to hand callbacks the true arg0
+     * even after invoke_syscall overwrites regs->regs[0] with the return value.
+     * When hooked at invoke_syscall the entry code has already written the same
+     * value here, so this is a harmless identical write. */
+    regs->orig_x0 = regs->regs[0];
     if (!syscall_hook_handler_granular) {
-        regs->orig_x0 = regs->regs[0];
         regs->syscallno = nr;
     }
 
@@ -592,6 +597,13 @@ static void syscall_dispatch_after(hook_fargs8_t *args, void *udata)
      * so mirror it into fargs->ret for the after callbacks and copy any change
      * back, matching the fp-hook chain semantics. */
     args->ret = regs->regs[0];
+    /* invoke_syscall has already clobbered regs->regs[0] with the syscall result,
+     * so after callbacks that read arguments through syscall_argn()/syscall_args()
+     * would see the return value in place of arg0. Restore the original first
+     * argument view from orig_x0 around the callbacks and put the result back
+     * afterwards, preserving the per-syscall hook semantics (this is what
+     * folkpatch_pathhide_after_getdents64 and any future after hook rely on). */
+    regs->regs[0] = regs->orig_x0;
     for (int i = n - 1; i >= 0; i--) {
         if (snap[i].after) snap[i].after(args, snap[i].udata);
     }
