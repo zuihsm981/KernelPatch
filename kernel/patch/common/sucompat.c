@@ -73,6 +73,12 @@ long kp_control_feature_sc(const char __user *uname, int state)
         return selinux_hide_control(state);
     }
 
+    /* Framework-wide log-level control (see include/log.h):
+     * state < 0 -> query current level, 0..5 -> set (0=off..5=verbose). */
+    if (!strcmp(name, "log") || !strcmp(name, "kp_log")) {
+        return kp_log_control(state);
+    }
+
     if (!strcmp(name, "sucompat_extra") || !strcmp(name, "path_probe")) {
         if (state < 0)
             /* Query: check if the hooks are currently registered. */

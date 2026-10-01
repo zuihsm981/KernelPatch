@@ -168,6 +168,27 @@ uint64_t get_random_u64(void)
 }
 KP_EXPORT_SYMBOL(get_random_u64);
 
+/*
+ * Manager-controllable framework log gate.
+ * Boolean semantics (matches Natives.controlFeature(name, enable)):
+ *   state = 0  (off) -> WARN : only W/E printed
+ *   state = 1  (on)  -> VERB : W/E/I/D/V all printed
+ *   state < 0  (query) -> returns current level
+ * Default is WARN (only W/E), so a release build is quiet until enabled.
+ */
+int kp_log_level = KP_LOG_WARN;
+KP_EXPORT_SYMBOL(kp_log_level);
+
+long kp_log_control(int state)
+{
+    if (state < 0) return kp_log_level;                 /* query */
+    if (state == 0) kp_log_level = KP_LOG_WARN;         /* off: W/E only */
+    else if (state == 1) kp_log_level = KP_LOG_VERB;    /* on: W/E/I/D/V */
+    else return -EINVAL;
+    return 0;
+}
+KP_EXPORT_SYMBOL(kp_log_control);
+
 // todo: rcu_dereference_protected
 uid_t current_uid()
 {
