@@ -337,13 +337,14 @@ long folkpatch_pathhide_list(char __user *out, int out_len)
         pos += written;
     }
     spin_unlock_irqrestore(&pathhide.lock, flags);
-    if (pos > out_len) {
+    if (pos >= out_len) { /* reserve one byte so the buffer is always NUL-terminated */
         vfree(snapshot);
         return -ENOBUFS;
     }
-    rc = compat_copy_to_user(out, snapshot, pos);
+    snapshot[pos] = '\0';
+    rc = compat_copy_to_user(out, snapshot, pos + 1);
     vfree(snapshot);
-    return rc == pos ? pos : -EFAULT;
+    return rc == pos + 1 ? pos : -EFAULT;
 }
 
 long folkpatch_pathhide_clear(void)
@@ -444,13 +445,14 @@ long folkpatch_pathhide_uid_list(char __user *out, int out_len)
         pos += written;
     }
     spin_unlock_irqrestore(&pathhide.lock, flags);
-    if (pos > out_len) {
+    if (pos >= out_len) { /* reserve room so the buffer is always NUL-terminated */
         vfree(snapshot);
         return -ENOBUFS;
     }
-    rc = compat_copy_to_user(out, snapshot, pos);
+    snapshot[pos] = '\0';
+    rc = compat_copy_to_user(out, snapshot, pos + 1);
     vfree(snapshot);
-    return rc == pos ? pos : -EFAULT;
+    return rc == pos + 1 ? pos : -EFAULT;
 }
 
 long folkpatch_pathhide_uid_clear(void)
